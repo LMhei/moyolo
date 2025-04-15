@@ -23,22 +23,22 @@ class YOLO(Model):
 
     def __init__(self, model="yolo11n.pt", task=None, verbose=False):
         """
-        Initialize a YOLO model.
+        初始化YOLO模型。
 
-        This constructor initializes a YOLO model, automatically switching to specialized model types
-        (YOLOWorld or YOLOE) based on the model filename.
+该构造函数用于初始化YOLO模型，会自动根据模型文件名切换到特定模型类型
+(如YOLOWorld或YOLOE)。
 
-        Args:
-            model (str | Path): Model name or path to model file, i.e. 'yolo11n.pt', 'yolov8n.yaml'.
-            task (str | None): YOLO task specification, i.e. 'detect', 'segment', 'classify', 'pose', 'obb'.
-                Defaults to auto-detection based on model.
-            verbose (bool): Display model info on load.
+Args:
+    model (str | Path): 模型名称或模型文件路径，例如：'yolo11n.pt', 'yolov8n.yaml'
+    task (str | None): YOLO任务类型，可选值：'detect'(检测), 'segment'(分割), 'classify'(分类),
+                    'pose'(姿态), 'obb'(定向边界框)。默认为基于模型的自动检测
+    verbose (bool): 加载时是否显示模型信息
 
-        Examples:
-            >>> from ultralytics import YOLO
-            >>> model = YOLO("yolov8n.pt")  # load a pretrained YOLOv8n detection model
-            >>> model = YOLO("yolov8n-seg.pt")  # load a pretrained YOLOv8n segmentation model
-            >>> model = YOLO("yolo11n.pt")  # load a pretrained YOLOv11n detection model
+Examples:
+    >>> from ultralytics import YOLO
+    >>> model = YOLO("yolov8n.pt")  # 加载预训练的YOLOv8n检测模型
+    >>> model = YOLO("yolov8n-seg.pt")  # 加载预训练的YOLOv8n分割模型
+    >>> model = YOLO("yolo11n.pt")  # 加载预训练的YOLOv11n检测模型
         """
         path = Path(model)
         if "-world" in path.stem and path.suffix in {".pt", ".yaml", ".yml"}:  # if YOLOWorld PyTorch model
@@ -57,35 +57,44 @@ class YOLO(Model):
     def task_map(self):
         """Map head to model, trainer, validator, and predictor classes."""
         return {
+            # ------------------------- 分类任务映射 -------------------------
             "classify": {
-                "model": ClassificationModel,
-                "trainer": yolo.classify.ClassificationTrainer,
-                "validator": yolo.classify.ClassificationValidator,
-                "predictor": yolo.classify.ClassificationPredictor,
+                "model": ClassificationModel,  # 图像分类模型架构
+                "trainer": yolo.classify.ClassificationTrainer,  # 分类训练流程控制
+                "validator": yolo.classify.ClassificationValidator,  # 分类精度验证逻辑
+                "predictor": yolo.classify.ClassificationPredictor,  # 分类推理接口
             },
+
+            # ------------------------- 目标检测任务映射 ---------------------
             "detect": {
-                "model": DetectionModel,
-                "trainer": yolo.detect.DetectionTrainer,
-                "validator": yolo.detect.DetectionValidator,
-                "predictor": yolo.detect.DetectionPredictor,
+                "model": DetectionModel,  # YOLO检测核心网络结构
+                "trainer": yolo.detect.DetectionTrainer,  # 检测任务训练器（包含数据增强/损失计算等）
+                "validator": yolo.detect.DetectionValidator,  # mAP等检测指标计算
+                "predictor": yolo.detect.DetectionPredictor,  # 检测推理实现（支持图片/视频/流媒体）
             },
+
+            # ------------------------- 实例分割任务映射 ---------------------
             "segment": {
-                "model": SegmentationModel,
-                "trainer": yolo.segment.SegmentationTrainer,
-                "validator": yolo.segment.SegmentationValidator,
-                "predictor": yolo.segment.SegmentationPredictor,
+                "model": SegmentationModel,  # 分割模型（检测头+掩膜预测）
+                "trainer": yolo.segment.SegmentationTrainer,  # 分割专用训练流程
+                "validator": yolo.segment.SegmentationValidator,  # 分割精度评估（box/mask mAP）
+                "predictor": yolo.segment.SegmentationPredictor,  # 分割结果生成（输出掩膜数据）
             },
+
+            # ------------------------- 姿态估计任务映射 ---------------------
             "pose": {
-                "model": PoseModel,
-                "trainer": yolo.pose.PoseTrainer,
-                "validator": yolo.pose.PoseValidator,
-                "predictor": yolo.pose.PosePredictor,
+                "model": PoseModel,  # 关键点检测网络结构
+                "trainer": yolo.pose.PoseTrainer,  # 姿态估计训练逻辑
+                "validator": yolo.pose.PoseValidator,  # 关键点精度验证（OKS指标）
+                "predictor": yolo.pose.PosePredictor,  # 实时姿态预测接口
             },
+
+            # ------------------------- 定向边界框任务映射 -------------------
             "obb": {
-                "model": OBBModel,
-                "trainer": yolo.obb.OBBTrainer,
-                "validator": yolo.obb.OBBValidator,
-                "predictor": yolo.obb.OBBPredictor,
+                "model": OBBModel,  # 旋转框检测模型（基于角度预测）
+                "trainer": yolo.obb.OBBTrainer,  # 旋转框专用训练器
+                "validator": yolo.obb.OBBValidator,  # 旋转框IoU计算
+                "predictor": yolo.obb.OBBPredictor,  # 旋转框预测结果生成
             },
         }
 

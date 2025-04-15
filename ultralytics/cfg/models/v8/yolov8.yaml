@@ -3,47 +3,58 @@
 # Ultralytics YOLOv8 object detection model with P3/8 - P5/32 outputs
 # Model docs: https://docs.ultralytics.com/models/yolov8
 # Task docs: https://docs.ultralytics.com/tasks/detect
-
+# ------------------------- 模型参数配置 -------------------------
 # Parameters
-nc: 80 # number of classes
+nc: 80 # number of classes    检测类别数（COCO数据集为80类）
+# 模型缩放系数（通过命令行参数 model=yolov8n.yaml 调用时，会自动选择对应缩放系数）
 scales: # model compound scaling constants, i.e. 'model=yolov8n.yaml' will call yolov8.yaml with scale 'n'
   # [depth, width, max_channels]
+  # [深度系数, 宽度系数, 最大通道数]
   n: [0.33, 0.25, 1024] # YOLOv8n summary: 129 layers, 3157200 parameters, 3157184 gradients, 8.9 GFLOPS
   s: [0.33, 0.50, 1024] # YOLOv8s summary: 129 layers, 11166560 parameters, 11166544 gradients, 28.8 GFLOPS
   m: [0.67, 0.75, 768] # YOLOv8m summary: 169 layers, 25902640 parameters, 25902624 gradients, 79.3 GFLOPS
   l: [1.00, 1.00, 512] # YOLOv8l summary: 209 layers, 43691520 parameters, 43691504 gradients, 165.7 GFLOPS
   x: [1.00, 1.25, 512] # YOLOv8x summary: 209 layers, 68229648 parameters, 68229632 gradients, 258.5 GFLOPS
-
+# YOLOv8n 参数：129层，315万参数，8.9 GFLOPS
+# YOLOv8s 参数：129层，1116万参数，28.8 GFLOPS
+# YOLOv8m 参数：169层，2590万参数，79.3 GFLOPS
+# YOLOv8l 参数：209层，4369万参数，165.7 GFLOPS
+# YOLOv8x 参数：209层，6822万参数，258.5 GFLOPS
+# ------------------------- 主干网络配置 -------------------------
 # YOLOv8.0n backbone
 backbone:
   # [from, repeats, module, args]
-  - [-1, 1, Conv, [64, 3, 2]] # 0-P1/2
-  - [-1, 1, Conv, [128, 3, 2]] # 1-P2/4
-  - [-1, 3, C2f, [128, True]]
-  - [-1, 1, Conv, [256, 3, 2]] # 3-P3/8
-  - [-1, 6, C2f, [256, True]]
-  - [-1, 1, Conv, [512, 3, 2]] # 5-P4/16
-  - [-1, 6, C2f, [512, True]]
-  - [-1, 1, Conv, [1024, 3, 2]] # 7-P5/32
-  - [-1, 3, C2f, [1024, True]]
-  - [-1, 1, SPPF, [1024, 5]] # 9
-
+  # [输入来源, 重复次数, 模块类型, 模块参数]
+  - [-1, 1, Conv, [64, 3, 2]] # 0-P1/2     # 0-P1/2层：3x3卷积，输出64通道，步长2（下采样到1/2）
+  - [-1, 1, Conv, [128, 3, 2]] # 1-P2/4    # 1-P2/4层：继续下采样到1/4
+  - [-1, 3, C2f, [128, True]]              # 2-C2f模块（跨阶段特征融合），含shortcut连接
+  - [-1, 1, Conv, [256, 3, 2]] # 3-P3/8    # 3-P3/8层：输出256通道，特征图尺寸1/8
+  - [-1, 6, C2f, [256, True]]              # 4-C2f模块，重复6次
+  - [-1, 1, Conv, [512, 3, 2]] # 5-P4/16   # 5-P4/16层：输出512通道，特征图尺寸1/16
+  - [-1, 6, C2f, [512, True]]              # 6-C2f模块，重复6次
+  - [-1, 1, Conv, [1024, 3, 2]] # 7-P5/32  # 7-P5/32层：输出1024通道，特征图尺寸1/32
+  - [-1, 3, C2f, [1024, True]]             # 8-C2f模块，重复3次
+  - [-1, 1, SPPF, [1024, 5]] # 9           # 9-SPPF空间金字塔池化层（5x5池化核）
+# ------------------------- 检测头配置 -------------------------
 # YOLOv8.0n head
 head:
-  - [-1, 1, nn.Upsample, [None, 2, "nearest"]]
-  - [[-1, 6], 1, Concat, [1]] # cat backbone P4
-  - [-1, 3, C2f, [512]] # 12
+  # 上采样路径（特征金字塔结构）
+  - [-1, 1, nn.Upsample, [None, 2, "nearest"]]                # 10-最近邻上采样2倍
+  - [[-1, 6], 1, Concat, [1]] # cat backbone P4               # 11-拼接主干网P4层（第6层）特征
+  - [-1, 3, C2f, [512]] # 12                                  # 12-C2f模块处理拼接特征
 
-  - [-1, 1, nn.Upsample, [None, 2, "nearest"]]
-  - [[-1, 4], 1, Concat, [1]] # cat backbone P3
-  - [-1, 3, C2f, [256]] # 15 (P3/8-small)
+  - [-1, 1, nn.Upsample, [None, 2, "nearest"]]                # 13-再次上采样2倍
+  - [[-1, 4], 1, Concat, [1]] # cat backbone P3               # 14-拼接主干网P3层（第4层）特征
+  - [-1, 3, C2f, [256]] # 15 (P3/8-small)                     # 15-生成P3/8小目标检测特征（256通道）
 
-  - [-1, 1, Conv, [256, 3, 2]]
-  - [[-1, 12], 1, Concat, [1]] # cat head P4
-  - [-1, 3, C2f, [512]] # 18 (P4/16-medium)
+  # 下采样路径（融合多尺度特征）
+  - [-1, 1, Conv, [256, 3, 2]]                                # 16-3x3卷积下采样（步长2）
+  - [[-1, 12], 1, Concat, [1]] # cat head P4                  # 17-拼接第12层特征
+  - [-1, 3, C2f, [512]] # 18 (P4/16-medium)                   # 18-生成P4/16中目标检测特征（512通道）
 
-  - [-1, 1, Conv, [512, 3, 2]]
-  - [[-1, 9], 1, Concat, [1]] # cat head P5
-  - [-1, 3, C2f, [1024]] # 21 (P5/32-large)
+  - [-1, 1, Conv, [512, 3, 2]]                                # 19-再次下采样
+  - [[-1, 9], 1, Concat, [1]] # cat head P5                   # 20-拼接主干网P5层（第9层）特征
+  - [-1, 3, C2f, [1024]] # 21 (P5/32-large)                   # 21-生成P5/32大目标检测特征（1024通道）
 
-  - [[15, 18, 21], 1, Detect, [nc]] # Detect(P3, P4, P5)
+  # 检测输出层（多尺度预测）
+  - [[15, 18, 21], 1, Detect, [nc]] # Detect(P3, P4, P5)      # 22-Detect检测头（输入P3/P4/P5特征）

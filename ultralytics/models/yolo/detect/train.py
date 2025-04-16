@@ -18,35 +18,34 @@ from ultralytics.utils.torch_utils import de_parallel, torch_distributed_zero_fi
 
 class DetectionTrainer(BaseTrainer):
     """
-    A class extending the BaseTrainer class for training based on a detection model.
+    扩展基础训练器(BaseTrainer)的检测模型训练专用类
 
-    This trainer specializes in object detection tasks, handling the specific requirements for training YOLO models
-    for object detection.
+    该训练器专注于目标检测任务，处理YOLO模型训练的特殊需求
 
-    Attributes:
-        model (DetectionModel): The YOLO detection model being trained.
-        data (dict): Dictionary containing dataset information including class names and number of classes.
-        loss_names (Tuple[str]): Names of the loss components used in training (box_loss, cls_loss, dfl_loss).
+    属性:
+        model (DetectionModel): 正在训练的YOLO检测模型
+        data (dict): 包含数据集信息的字典（含类别名称和类别数量）
+        loss_names (Tuple[str]): 训练使用的损失项名称（边界框损失/分类损失/分布损失）
 
-    Methods:
-        build_dataset: Build YOLO dataset for training or validation.
-        get_dataloader: Construct and return dataloader for the specified mode.
-        preprocess_batch: Preprocess a batch of images by scaling and converting to float.
-        set_model_attributes: Set model attributes based on dataset information.
-        get_model: Return a YOLO detection model.
-        get_validator: Return a validator for model evaluation.
-        label_loss_items: Return a loss dictionary with labeled training loss items.
-        progress_string: Return a formatted string of training progress.
-        plot_training_samples: Plot training samples with their annotations.
-        plot_metrics: Plot metrics from a CSV file.
-        plot_training_labels: Create a labeled training plot of the YOLO model.
-        auto_batch: Calculate optimal batch size based on model memory requirements.
+    方法:
+        build_dataset: 构建用于训练/验证的YOLO格式数据集
+        get_dataloader: 构造并返回指定模式的数据加载器
+        preprocess_batch: 对图像批次进行归一化和浮点数转换预处理
+        set_model_attributes: 基于数据集信息设置模型属性
+        get_model: 返回YOLO检测模型实例
+        get_validator: 返回模型评估使用的验证器
+        label_loss_items: 返回带标签的训练损失字典
+        progress_string: 返回格式化后的训练进度字符串
+        plot_training_samples: 绘制带标注的训练样本
+        plot_metrics: 从CSV文件绘制训练指标曲线
+        plot_training_labels: 创建训练标签的可视化图表
+        auto_batch: 根据显存容量自动计算最优批次大小
 
-    Examples:
-        >>> from ultralytics.models.yolo.detect import DetectionTrainer
-        >>> args = dict(model="yolo11n.pt", data="coco8.yaml", epochs=3)
-        >>> trainer = DetectionTrainer(overrides=args)
-        >>> trainer.train()
+    示例:
+    #    >>> from ultralytics.models.yolo.detect import DetectionTrainer
+    #    >>> args = dict(model="yolo11n.pt", data="coco8.yaml", epochs=3)
+    #    >>> trainer = DetectionTrainer(overrides=args)
+    #    >>> trainer.train()
     """
 
     def build_dataset(self, img_path, mode="train", batch=None):

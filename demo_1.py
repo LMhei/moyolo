@@ -57,7 +57,9 @@ def my_pre():
     plt.show()
 
 if __name__ == '__main__':
-    my_pre()
+     model = YOLO("mtyolov8.yaml")
+     model.train(data="./ultralytics/cfg/datasets/mt.yaml", epochs=50)
+    #my_pre()
     # model = YOLO("./best.pt")
     # results = model("./mt.jpg")
     # for result in results:

@@ -103,21 +103,33 @@ class BaseModel(torch.nn.Module):
 
     def forward(self, x, *args, **kwargs):
         """
-        Perform forward pass of the model for either training or inference.
+        执行模型的前向传播，支持训练和推理两种模式
 
-        If x is a dict, calculates and returns the loss for training. Otherwise, returns predictions for inference.
+    如果输入x是字典类型（训练模式），计算并返回损失值；
+    否则返回推理预测结果（预测模式）
 
-        Args:
-            x (torch.Tensor | dict): Input tensor for inference, or dict with image tensor and labels for training.
-            *args (Any): Variable length argument list.
-            **kwargs (Any): Arbitrary keyword arguments.
+    Args:
+        x (torch.Tensor | dict):
+            - 预测模式：输入图像张量，形状为 [B, C, H, W]
+            - 训练模式：包含图像张量和标签的字典，格式为：
+              {'img': tensor, 'bboxes': tensor, 'labels': tensor, ...}
+        *args (Any): 可变长度参数列表（保留未来扩展）
+        **kwargs (Any): 任意关键字参数（保留未来扩展）
 
-        Returns:
-            (torch.Tensor): Loss if x is a dict (training), or network predictions (inference).
+    Returns:
+        (torch.Tensor):
+            - 训练模式：返回损失值张量，形状为 [1]
+            - 预测模式：返回网络预测结果张量，形状为 [B, num_anchors, 5 + nc]
+
+    实现逻辑:
+        if 训练模式（输入为字典）:
+            调用 self.loss() 计算损失 → 用于反向传播
+        else:
+            调用 self.predict() 进行推理 → 生成预测结果
         """
-        if isinstance(x, dict):  # for cases of training and validating while training.
+        if isinstance(x, dict):  # 训练/验证模式（输入包含图像和标签）
             return self.loss(x, *args, **kwargs)
-        return self.predict(x, *args, **kwargs)
+        return self.predict(x, *args, **kwargs)     # 推理模式（纯图像输入）
 
     def predict(self, x, profile=False, visualize=False, augment=False, embed=None):
         """
@@ -1095,9 +1107,9 @@ def temporary_modules(modules=None, attributes=None):
         attributes (dict, optional): A dictionary mapping old module attributes to new module attributes.
 
     Examples:
-        >>> with temporary_modules({"old.module": "new.module"}, {"old.module.attribute": "new.module.attribute"}):
-        >>> import old.module  # this will now import new.module
-        >>> from old.module import attribute  # this will now import new.module.attribute
+    # >>> with temporary_modules({"old.module": "new.module"}, {"old.module.attribute": "new.module.attribute"}):
+    #  >>> import old.module  # this will now import new.module
+    #  >>> from old.module import attribute  # this will now import new.module.attribute
 
     Note:
         The changes are only in effect inside the context manager and are undone once the context manager exits.
@@ -1335,15 +1347,15 @@ def attempt_load_one_weight(weight, device=None, inplace=True, fuse=False):
 
 def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
     """
-    Parse a YOLO model.yaml dictionary into a PyTorch model.
+    将YOLO模型的YAML配置字典解析为PyTorch模型
 
     Args:
-        d (dict): Model dictionary.
-        ch (int): Input channels.
-        verbose (bool): Whether to print model details.
+        d (dict): 模型配置字典，包含backbone/head等结构定义
+        ch (int): 输入通道数（如RGB图像为3）
+        verbose (bool): 是否打印模型详细信息
 
     Returns:
-        (tuple): Tuple containing the PyTorch model and sorted list of output layers.
+        (tuple): 返回包含PyTorch模型和输出层索引列表的元组
     """
     import ast
 

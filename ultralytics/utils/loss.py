@@ -92,20 +92,39 @@ class BboxLoss(nn.Module):
         self.dfl_loss = DFLoss(reg_max) if reg_max > 1 else None
 
     def forward(self, pred_dist, pred_bboxes, anchor_points, target_bboxes, target_scores, target_scores_sum, fg_mask):
-        """Compute IoU and DFL losses for bounding boxes."""
+        """Compute IoU and DFL losses for bounding boxes.   计算边界框的IoU损失和DFL损失"""
+
+        # ------------------------ IoU损失计算 ------------------------
+        # 计算前景目标的权重（基于目标置信度得分）
+        # target_scores.sum(-1) → 每个目标的类别得分求和 [num_fg]
+        # [fg_mask] → 仅选择前景目标的权重（背景目标不参与计算）
+        # unsqueeze(-1) → 增加最后一个维度 [num_fg, 1] 便于后续广播
         weight = target_scores.sum(-1)[fg_mask].unsqueeze(-1)
+
+        # 计算预测框与真实框的CIoU（考虑中心点距离/长宽比的改进IoU）
+        # pred_bboxes[fg_mask] → 仅选择前景预测框 [num_fg, 4]
+        # target_bboxes[fg_mask] → 对应前景的真实框 [num_fg, 4]
+        # xywh=False → 输入框格式为xyxy（左上右下坐标）
         iou = bbox_iou(pred_bboxes[fg_mask], target_bboxes[fg_mask], xywh=False, CIoU=True)
+
+        # IoU损失 = (1 - IoU) * 权重 → 求和后归一化
         loss_iou = ((1.0 - iou) * weight).sum() / target_scores_sum
 
-        # DFL loss
+        # ------------------------ DFL损失计算 ------------------------
         if self.dfl_loss:
+            # 将真实框转换为锚点的距离分布（用于DFL监督）
+            # target_ltrb格式 → 每个目标框到锚点的左/上/右/下距离 [num_fg, 4]
+            # self.dfl_loss.reg_max-1 → 分布的最大离散值（默认15）
             target_ltrb = bbox2dist(anchor_points, target_bboxes, self.dfl_loss.reg_max - 1)
+            # 计算DFL损失（分布焦点损失）
+            # pred_dist[fg_mask].view(-1, self.dfl_loss.reg_max) → [num_fg*4, reg_max]
+            # target_ltrb[fg_mask] → [num_fg, 4] 需要转换为整数索引
             loss_dfl = self.dfl_loss(pred_dist[fg_mask].view(-1, self.dfl_loss.reg_max), target_ltrb[fg_mask]) * weight
-            loss_dfl = loss_dfl.sum() / target_scores_sum
+            loss_dfl = loss_dfl.sum() / target_scores_sum   # 归一化
         else:
-            loss_dfl = torch.tensor(0.0).to(pred_dist.device)
+            loss_dfl = torch.tensor(0.0).to(pred_dist.device)   # 未启用DFL时损失为0
 
-        return loss_iou, loss_dfl
+        return loss_iou, loss_dfl   # 返回两个损失项
 
 
 class RotatedBboxLoss(BboxLoss):
@@ -237,17 +256,34 @@ class v8DetectionLoss:
 
         target_scores_sum = max(target_scores.sum(), 1)
 
-        # Cls loss
+        # 分类损失计算 ----------------------------------------------------------
+        # 选项1：使用Varifocal Loss（VFL方法，当前被注释）
         # loss[1] = self.varifocal_loss(pred_scores, target_scores, target_labels) / target_scores_sum  # VFL way
+        # 选项2：使用二元交叉熵损失（BCE，当前激活的方法）
         loss[1] = self.bce(pred_scores, target_scores.to(dtype)).sum() / target_scores_sum  # BCE
 
-        # Bbox loss
-        if fg_mask.sum():
-            target_bboxes /= stride_tensor
+        """
+        参数说明:
+        - pred_scores: 模型预测的类别置信度 [batch_size, num_anchors, num_classes]
+        - target_scores: 真实标签的one-hot编码 [batch_size, num_anchors, num_classes]
+        - target_scores_sum: 正样本数量（用于损失归一化）
+        - dtype: 数据类型（通常为float32）
+        """
+
+        # 边界框损失计算 ------------------------------------------------------
+        if fg_mask.sum():       # 当存在前景目标时计算
+            # 将真实框坐标归一化到特征图尺度（除以对应特征层的stride）
+            target_bboxes /= stride_tensor      # stride_tensor形状 [num_layers, 1, 1]
+
+            # 计算边界框损失（返回iou_loss和dfl_loss）
+            # pred_distri: 分布预测张量 [batch_size, num_anchors, 4*reg_max]
+            # pred_bboxes: 预测框坐标 [batch_size, num_anchors, 4]
+            # anchor_points: 锚点坐标 [num_anchors, 2]
             loss[0], loss[2] = self.bbox_loss(
                 pred_distri, pred_bboxes, anchor_points, target_bboxes, target_scores, target_scores_sum, fg_mask
             )
 
+        # 损失加权 ----------------------------------------------------------
         loss[0] *= self.hyp.box  # box gain
         loss[1] *= self.hyp.cls  # cls gain
         loss[2] *= self.hyp.dfl  # dfl gain
